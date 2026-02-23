@@ -16,21 +16,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onListingAdded }) => {
         dateCreated: new Date().toISOString().split('T')[0],
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSubmitting(true);
 
-        storageService.saveListing({
-            url: formData.url,
-            priceInitial: Number(formData.priceInitial),
-            priceCurrent: Number(formData.priceInitial),
-            location: formData.location,
-            surface: Number(formData.surface),
-            dateCreated: new Date(formData.dateCreated).toISOString(),
-            imageUrl: formData.imageUrl || undefined,
-        });
+        try {
+            await storageService.saveListing({
+                url: formData.url,
+                priceInitial: Number(formData.priceInitial),
+                priceCurrent: Number(formData.priceInitial),
+                location: formData.location,
+                surface: Number(formData.surface),
+                dateCreated: new Date(formData.dateCreated).toISOString(),
+                imageUrl: formData.imageUrl || undefined,
+            });
 
-        setFormData({ url: '', priceInitial: '', location: '', surface: '', imageUrl: '', dateCreated: new Date().toISOString().split('T')[0] });
-        onListingAdded();
+            setFormData({ url: '', priceInitial: '', location: '', surface: '', imageUrl: '', dateCreated: new Date().toISOString().split('T')[0] });
+            onListingAdded();
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -148,8 +155,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onListingAdded }) => {
                     />
                 </div>
                 <div className="md:col-span-2 mt-2">
-                    <button type="submit" className="btn-primary w-full md:w-auto">
-                        Enregistrer le bien
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className={`btn-primary w-full md:w-auto flex items-center justify-center gap-2 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                Enregistrement...
+                            </>
+                        ) : 'Enregistrer le bien'}
                     </button>
                 </div>
             </form>

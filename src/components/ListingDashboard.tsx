@@ -16,36 +16,36 @@ export const ListingDashboard: React.FC<ListingDashboardProps> = ({ listings, on
     const [newDate, setNewDate] = useState<string>('');
     const [newImageUrl, setNewImageUrl] = useState<string>('');
 
-    const handleUpdatePrice = (id: string) => {
+    const handleUpdatePrice = async (id: string) => {
         if (!newPrice) return;
-        storageService.updatePrice(id, Number(newPrice));
+        await storageService.updatePrice(id, Number(newPrice));
         setEditingId(null);
         setNewPrice('');
         onUpdate();
     };
 
-    const handleToggleStatus = (id: string) => {
-        storageService.toggleStatus(id);
+    const handleToggleStatus = async (id: string) => {
+        await storageService.toggleStatus(id);
         onUpdate();
     };
 
-    const handleUpdateDate = (id: string) => {
+    const handleUpdateDate = async (id: string) => {
         if (!newDate) return;
-        storageService.updateDate(id, new Date(newDate).toISOString());
+        await storageService.updateDate(id, new Date(newDate).toISOString());
         setEditingId(null);
         setNewDate('');
         onUpdate();
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('Êtes-vous sûr de vouloir supprimer ce bien ?')) {
-            storageService.deleteListing(id);
+            await storageService.deleteListing(id);
             onUpdate();
         }
     };
 
-    const handleUpdateImageUrl = (id: string) => {
-        storageService.updateImageUrl(id, newImageUrl);
+    const handleUpdateImageUrl = async (id: string) => {
+        await storageService.updateImageUrl(id, newImageUrl);
         setEditingId(null);
         setNewImageUrl('');
         onUpdate();
@@ -189,8 +189,8 @@ export const ListingDashboard: React.FC<ListingDashboardProps> = ({ listings, on
                                                 onChange={e => setNewPrice(e.target.value)}
                                             />
                                             <button
-                                                onClick={() => {
-                                                    storageService.updateInitialPrice(listing.id, Number(newPrice));
+                                                onClick={async () => {
+                                                    await storageService.updateInitialPrice(listing.id, Number(newPrice));
                                                     setEditingId(null);
                                                     setNewPrice('');
                                                     onUpdate();

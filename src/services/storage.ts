@@ -1,106 +1,253 @@
+import { supabase } from '../lib/supabase';
 import type { PropertyListing } from '../types';
 
-const STORAGE_KEY = 'real-estate-listings';
-
 export const storageService = {
-    getListings(): PropertyListing[] {
-        const data = localStorage.getItem(STORAGE_KEY);
-        return data ? JSON.parse(data) : [];
+    async getListings(): Promise<PropertyListing[]> {
+        const { data, error } = await supabase
+            .from('listings')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching listings:', error);
+            return [];
+        }
+
+        return data.map(item => ({
+            id: item.id,
+            url: item.url,
+            priceInitial: item.price_initial,
+            priceCurrent: item.price_current,
+            location: item.location,
+            surface: item.surface,
+            dateCreated: item.date_created,
+            priceDrops: item.price_drops,
+            history: item.history || [],
+            status: item.status,
+            imageUrl: item.image_url
+        }));
     },
 
-    saveListing(listing: Omit<PropertyListing, 'id' | 'priceDrops' | 'history' | 'status'>): PropertyListing {
-        const listings = this.getListings();
-
-        const newListing: PropertyListing = {
-            ...listing,
-            id: crypto.randomUUID(),
-            priceDrops: 0,
+    async saveListing(listing: Omit<PropertyListing, 'id' | 'priceDrops' | 'history' | 'status'>): Promise<PropertyListing | null> {
+        const newListing = {
+            url: listing.url,
+            price_initial: listing.priceInitial,
+            price_current: listing.priceInitial,
+            location: listing.location,
+            surface: listing.surface,
+            date_created: listing.dateCreated,
+            price_drops: 0,
             status: 'active',
+            image_url: listing.imageUrl,
             history: [{ date: listing.dateCreated, price: listing.priceInitial }]
         };
 
-        listings.push(newListing);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
-        return newListing;
-    },
+        const { data, error } = await supabase
+            .from('listings')
+            .insert(newListing)
+            .select()
+            .single();
 
-    updatePrice(id: string, newPrice: number): PropertyListing | null {
-        const listings = this.getListings();
-        const index = listings.findIndex(l => l.id === id);
-
-        if (index === -1) return null;
-
-        const listing = listings[index];
-
-        // If price changed, update history and count drops
-        if (listing.priceCurrent !== newPrice) {
-            const isDrop = newPrice < listing.priceCurrent;
-
-            listing.priceCurrent = newPrice;
-            listing.history.push({ date: new Date().toISOString(), price: newPrice });
-
-            if (isDrop) {
-                listing.priceDrops += 1;
-            }
+        if (error) {
+            console.error('Error saving listing:', error);
+            return null;
         }
 
-        listings[index] = listing;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
-        return listing;
+        return {
+            id: data.id,
+            url: data.url,
+            priceInitial: data.price_initial,
+            priceCurrent: data.price_current,
+            location: data.location,
+            surface: data.surface,
+            dateCreated: data.date_created,
+            priceDrops: data.price_drops,
+            history: data.history,
+            status: data.status,
+            imageUrl: data.image_url
+        };
     },
 
-    deleteListing(id: string): void {
-        const listings = this.getListings();
-        const filtered = listings.filter(l => l.id !== id);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-    },
+    async updatePrice(id: string, newPrice: number): Promise<PropertyListing | null> {
+        // Fetch current listing first to update history
+        const { data: current, error: fetchError } = await supabase
+            .from('listings')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-    toggleStatus(id: string): PropertyListing | null {
-        const listings = this.getListings();
-        const index = listings.findIndex(l => l.id === id);
-        if (index === -1) return null;
+        if (fetchError || !current) return null;
 
-        listings[index].status = listings[index].status === 'active' ? 'sold' : 'active';
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
-        return listings[index];
-    },
+        const history = [...(current.history || [])];
+        let priceDrops = current.price_drops;
 
-    updateDate(id: string, newDate: string): PropertyListing | null {
-        const listings = this.getListings();
-        const index = listings.findIndex(l => l.id === id);
-        if (index === -1) return null;
-
-        listings[index].dateCreated = newDate;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
-        return listings[index];
-    },
-
-    updateInitialPrice(id: string, newPrice: number): PropertyListing | null {
-        const listings = this.getListings();
-        const index = listings.findIndex(l => l.id === id);
-        if (index === -1) return null;
-
-        const listing = listings[index];
-        const oldInitial = listing.priceInitial;
-        listing.priceInitial = newPrice;
-
-        // Optionally update first history entry if it was the initial price
-        if (listing.history.length > 0 && listing.history[0].price === oldInitial) {
-            listing.history[0].price = newPrice;
+        if (current.price_current !== newPrice) {
+            const isDrop = newPrice < current.price_current;
+            history.push({ date: new Date().toISOString(), price: newPrice });
+            if (isDrop) priceDrops += 1;
         }
 
-        listings[index] = listing;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
-        return listing;
+        const { data, error } = await supabase
+            .from('listings')
+            .update({
+                price_current: newPrice,
+                history,
+                price_drops: priceDrops
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return null;
+
+        return {
+            id: data.id,
+            url: data.url,
+            priceInitial: data.price_initial,
+            priceCurrent: data.price_current,
+            location: data.location,
+            surface: data.surface,
+            dateCreated: data.date_created,
+            priceDrops: data.price_drops,
+            history: data.history,
+            status: data.status,
+            imageUrl: data.image_url
+        };
     },
 
-    updateImageUrl(id: string, imageUrl: string): PropertyListing | null {
-        const listings = this.getListings();
-        const index = listings.findIndex(l => l.id === id);
-        if (index === -1) return null;
+    async deleteListing(id: string): Promise<boolean> {
+        const { error } = await supabase
+            .from('listings')
+            .delete()
+            .eq('id', id);
 
-        listings[index].imageUrl = imageUrl || undefined;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
-        return listings[index];
+        return !error;
+    },
+
+    async toggleStatus(id: string): Promise<PropertyListing | null> {
+        const { data: current, error: fetchError } = await supabase
+            .from('listings')
+            .select('status')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !current) return null;
+
+        const newStatus = current.status === 'active' ? 'sold' : 'active';
+
+        const { data, error } = await supabase
+            .from('listings')
+            .update({ status: newStatus })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return null;
+
+        return {
+            id: data.id,
+            url: data.url,
+            priceInitial: data.price_initial,
+            priceCurrent: data.price_current,
+            location: data.location,
+            surface: data.surface,
+            dateCreated: data.date_created,
+            priceDrops: data.price_drops,
+            history: data.history,
+            status: data.status,
+            imageUrl: data.image_url
+        };
+    },
+
+    async updateDate(id: string, newDate: string): Promise<PropertyListing | null> {
+        const { data, error } = await supabase
+            .from('listings')
+            .update({ date_created: newDate })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return null;
+
+        return {
+            id: data.id,
+            url: data.url,
+            priceInitial: data.price_initial,
+            priceCurrent: data.price_current,
+            location: data.location,
+            surface: data.surface,
+            dateCreated: data.date_created,
+            priceDrops: data.price_drops,
+            history: data.history,
+            status: data.status,
+            imageUrl: data.image_url
+        };
+    },
+
+    async updateInitialPrice(id: string, newPrice: number): Promise<PropertyListing | null> {
+        const { data: current, error: fetchError } = await supabase
+            .from('listings')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !current) return null;
+
+        const history = [...(current.history || [])];
+        if (history.length > 0 && history[0].price === current.price_initial) {
+            history[0].price = newPrice;
+        }
+
+        const { data, error } = await supabase
+            .from('listings')
+            .update({
+                price_initial: newPrice,
+                history
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return null;
+
+        return {
+            id: data.id,
+            url: data.url,
+            priceInitial: data.price_initial,
+            priceCurrent: data.price_current,
+            location: data.location,
+            surface: data.surface,
+            dateCreated: data.date_created,
+            priceDrops: data.price_drops,
+            history: data.history,
+            status: data.status,
+            imageUrl: data.image_url
+        };
+    },
+
+    async updateImageUrl(id: string, imageUrl: string): Promise<PropertyListing | null> {
+        const { data, error } = await supabase
+            .from('listings')
+            .update({ image_url: imageUrl || null })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) return null;
+
+        return {
+            id: data.id,
+            url: data.url,
+            priceInitial: data.price_initial,
+            priceCurrent: data.price_current,
+            location: data.location,
+            surface: data.surface,
+            dateCreated: data.date_created,
+            priceDrops: data.price_drops,
+            history: data.history,
+            status: data.status,
+            imageUrl: data.image_url
+        };
     }
 };
+

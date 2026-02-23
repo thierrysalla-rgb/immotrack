@@ -12,8 +12,16 @@ function App() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'sold'>('all');
 
-  const refreshListings = () => {
-    setListings(storageService.getListings());
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refreshListings = async () => {
+    setIsLoading(true);
+    try {
+      const data = await storageService.getListings();
+      setListings(data);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -109,11 +117,18 @@ function App() {
           </div>
         </div>
 
-        <ListingDashboard
-          listings={filteredListings}
-          onUpdate={refreshListings}
-          showAdminActions={activeTab === 'admin' && isAdminAuthenticated}
-        />
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            <p className="text-secondary animate-pulse">Chargement des annonces...</p>
+          </div>
+        ) : (
+          <ListingDashboard
+            listings={filteredListings}
+            onUpdate={refreshListings}
+            showAdminActions={activeTab === 'admin' && isAdminAuthenticated}
+          />
+        )}
       </main>
 
       <footer className="mt-20 py-10 text-center border-t border-glass-border">
