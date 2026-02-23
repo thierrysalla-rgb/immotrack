@@ -49,7 +49,7 @@ export const storageService = {
             .single();
 
         if (error) {
-            console.error('Error saving listing:', error);
+            console.error('Error saving listing to Supabase:', error.message, error.details, error.hint);
             return null;
         }
 
